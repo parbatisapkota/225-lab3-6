@@ -10,10 +10,12 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/main']],
-                          userRemoteConfigs: [[url: "${GITHUB_URL}"]]])
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: "${GITHUB_URL}"]]])
             }
         }
 
@@ -33,6 +35,7 @@ pipeline {
                 }
             }
         }
+
         stage('Push Docker Image') {
             steps {
                 script {
@@ -48,9 +51,14 @@ pipeline {
                 script {
                     // Set up Kubernetes configuration using the specified KUBECONFIG
                     def kubeConfig = readFile(KUBECONFIG)
+
                     // Update deployment-dev.yaml to use the new image tag
                     sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment-dev.yaml"
-                    sh "kubectl apply -f deployment-dev.yaml"
+
+                    sh """
+                    export KUBECONFIG=$KUBECONFIG
+                    kubectl apply -f deployment-dev.yaml
+                    """
                 }
             }
         }
@@ -72,13 +80,17 @@ pipeline {
             steps {
                 script {
                     // Set up Kubernetes configuration using the specified KUBECONFIG
-                    //sh "ls -la"
+
                     sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment-prod.yaml"
-                    sh "cd .."
-                    sh "kubectl apply -f deployment-prod.yaml"
+
+                    sh """
+                    export KUBECONFIG=$KUBECONFIG
+                    kubectl apply -f deployment-prod.yaml
+                    """
                 }
             }
         }
+
         stage('Check Kubernetes Cluster') {
             steps {
                 script {
@@ -87,8 +99,8 @@ pipeline {
             }
         }
     }
+
     post {
-        
         success {
             slackSend color: "good", message: "Build Completed: ${env.JOB_NAME} ${env.BUILD_NUMBER}"
         }
